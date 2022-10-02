@@ -1,19 +1,27 @@
-# This is a sample Python script.
-
-# Press Shift+F10 to execute it or replace it with your code.
-# Press Double Shift to search everywhere for classes, files, tool windows, actions, and settings.
 import torch
+import librosa
+"""
+torch finds 2 devices: cuda 0 and cpu
+ctrl op function om naar declaration te gaan
+"""
 x = torch.rand(5, 3)
 print(x)
 print(torch.cuda.is_available())
+print(torch.has_cuda)
+
+device = torch.device("cuda")
+x = torch.ones(5,device = device)
+y = torch.ones(5)
+y = y.to(device)
+z = x+y
+z = z.to("cpu")
+z = z.numpy()
+print(x,y,z)
 
 def print_hi(name):
-    # Use a breakpoint in the code line below to debug your script.
-    print(f'Hi, {name}')  # Press Ctrl+F8 to toggle the breakpoint.
+    print(f'Hi, {name}')
 
 
-# Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     print_hi('PyCharm')
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
