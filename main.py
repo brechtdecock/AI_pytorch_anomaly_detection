@@ -1,5 +1,8 @@
 import torch
 import librosa
+import matplotlib as plt
+import numpy as np
+
 """
 torch finds 2 devices: cuda 0 and cpu
 ctrl op function om naar declaration te gaan
@@ -18,6 +21,7 @@ z = z.to("cpu")
 z = z.numpy()
 print(x,y,z)
 
+        
 def print_hi(name):
     print(f'Hi, {name}')
 
