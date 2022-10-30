@@ -16,7 +16,7 @@ print("Is cuda available:", torch.cuda.is_available())
 data_case = 1
 data_case_channel = 1
 
-dataset_base_path = r"C:\Users\brech\THESIS_local\ToyADMOS"
+dataset_base_path = r"C:\Users\brech\THESIS_local\ToyADMOS\Toycar all data"
 dataset_total_path = dataset_base_path + f"\expCase{data_case}_ch{data_case_channel}_dataset_ToyCar"
 
 dataset_total_path_test_anomaly = dataset_total_path +r"\test_anomaly"
@@ -31,7 +31,7 @@ print("the current .wav signal is:"+ sample_path)
 print(torchaudio.info(sample_path))#different value than librosa?
 
 """
-librosa resamples to 22050 instead of native sampling rate: what do do?
+librosa resamples to 22050 instead of native sampling rate: what to do?
 """
 waveform, sample_rate = librosa.load(sample_path)
 print("sample rate is "+ str(sample_rate))
@@ -46,6 +46,7 @@ plt.show()
 #plot spectogram
 plt.figure()
 D = librosa.amplitude_to_db(np.abs(librosa.stft(waveform)))
+print("size of D" + str(D.shape))
 librosa.display.specshow(D, y_axis='log', x_axis='time', sr=sample_rate)
 plt.title("Current sample: " + sample_waves[0])
 plt.show()
@@ -70,6 +71,7 @@ plot_magnitude_spectrum(waveform, sample_rate)
 #root mean square of sample
 rms = librosa.feature.rms(waveform)[0]
 
+
 frames = range(len(rms))
 t = librosa.frames_to_time(frames)
 
@@ -89,6 +91,15 @@ plt.figure()
 plt.plot(t, zcr, color="g")
 librosa.display.waveshow(waveform, sr = sample_rate)
 plt.title("ZCR of waveform")
+plt.show()
+
+# %%
+spectral_centroid =  librosa.feature.spectral_centroid(y=waveform)[0]
+spectral_bandwidth = librosa.feature.spectral_bandwidth(y=waveform)[0]
+plt.figure()
+plt.plot(t, spectral_centroid, color="g")
+plt.plot(t, spectral_bandwidth, color="y")
+plt.title("SC of sample")
 plt.show()
 
 # %%
