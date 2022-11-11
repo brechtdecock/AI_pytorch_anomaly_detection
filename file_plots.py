@@ -9,7 +9,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
-import audioop
 
 print("Is cuda available:", torch.cuda.is_available())
 
@@ -67,7 +66,7 @@ def plot_magnitude_spectrum(signal, sr):
 plot_magnitude_spectrum(waveform, sample_rate)
 
 #%% 
-#librosa default frame and hop lengths are set to 2048 and 512 sample
+#librosa default frame and hop lengths are set to 2048 and 512 
 #root mean square of sample
 rms = librosa.feature.rms(waveform)[0]
 
@@ -100,6 +99,7 @@ plt.figure()
 plt.plot(t, spectral_centroid, color="g")
 plt.plot(t, spectral_bandwidth, color="y")
 plt.title("SC of sample")
+plt.legend(["spectral centroid", "spectral bandwidth"])
 plt.show()
 
 # %%

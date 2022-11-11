@@ -69,3 +69,5 @@ plt.plot(t_avg, avg_waveform, color="r")
 plt.title("Averaged waveform")
 
 # %%
+print(librosa.get_duration(y= waveform, sr = sample_rate))
+# %%
