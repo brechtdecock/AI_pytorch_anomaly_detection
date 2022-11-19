@@ -9,11 +9,13 @@ import librosa.display
 import numpy as np  
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler
 from sklearn.utils import shuffle
 from torch import *
 from torch.utils.data import DataLoader
 from AutoEncoderClass import *
 import wavio
+import gc
 
 def check_cuda():  
     if torch.cuda.is_available(): 
@@ -44,49 +46,52 @@ def get_waveform_seconds(full_sample_name, start = 0, stop = 11):
     waveform = waveform[start*sample_rate : stop*sample_rate]
     return waveform
 
+
 #%% 
 #data preprocessing
+#todo normalise to make it possible to train over different cases(that are of different loudness)
 data_case1_normal = data_csv[(data_csv["norm/ab"] == "normal") & (data_csv["Case"] == "case1")]
 data_case1_abnormal = data_csv[(data_csv["norm/ab"] == "abnormal") & (data_csv["Case"] == "case1")]
 
 train_dataset_normal, test_dataset_normal=train_test_split(data_case1_normal, test_size=0.2, shuffle=True)  #percentages, sklearn function
-train_dataset_abnormal, test_dataset_abnormal=train_test_split(data_case1_abnormal, test_size=0.2, shuffle=True)
+test_dataset_abnormal = data_case1_abnormal
 
-train_dataset = pd.concat([train_dataset_normal, train_dataset_abnormal])
+train_dataset = train_dataset_normal  
 test_dataset = pd.concat([test_dataset_normal, test_dataset_abnormal])
 train_dataset, validation_dataset = train_test_split(train_dataset, test_size=0.2, shuffle=True) #further split into train and validation
 
-X_train = DataLoader(train_dataset["Full Sample Name"].values, batch_size = 64, shuffle = True)
-X_test = DataLoader(test_dataset["Full Sample Name"].values, batch_size = 64, shuffle = True)
-X_train = DataLoader(validation_dataset["Full Sample Name"].values, batch_size = 64, shuffle = True)
+#shuffle all datasets for good measure
+train_dataset= shuffle(train_dataset)
+validation_dataset= shuffle(validation_dataset)
+test_dataset= shuffle(test_dataset)
+
+X_train = DataLoader(train_dataset["Full Sample Name"], batch_size = 64, shuffle = False)
+X_test = DataLoader(test_dataset["Full Sample Name"], batch_size = 64, shuffle = False)
+X_train = DataLoader(validation_dataset["Full Sample Name"], batch_size = 64, shuffle = False)
 
 Y_train = train_dataset["norm/ab"]
 Y_test = test_dataset["norm/ab"]
 Y_val = validation_dataset["norm/ab"]
 #%%
 model = AutoEncoder(16000).to(device=device)#assume 1 sec of waveform
-loss = nn.L1Loss()
-#nn.MSELoss()?? best type of loss for sound?
+loss = nn.MSELoss()    #nn.L1Loss()? best type of loss for sound?
 learning_rate = 0.01
 optimizer=torch.optim.Adam(model.parameters(), lr=learning_rate)
 print(model)
-#%%
-def score(x): # not yet in use
-    y_pred = model(V(x))
-    x1 = V(x)
-    return loss(y_pred,x1).item()
 
+#%%
 epochs = 10
-outputs = []
+original_wav = []
+reconstructed_wav = []
+
 losses = []
 
-
-#%%
 def train(epochs, model, model_loss):
     
     for epoch in tqdm(arange(0, epochs)):
-        for waveform_Sample_name in X_train: #X_train is dataloader of the "names" of the wavefiles
+        for waveform_Sample_name in X_train.values: #X_train is dataloader of the "names" of the wavefiles
             waveform = get_waveform_seconds(waveform_Sample_name[0], 4, 5)
+            waveform = np.interp(waveform, (waveform.min(), waveform.max()), (-1, +1)) #scale the date between -1 and +1
             waveform = torch.FloatTensor(waveform).to(device=device)
             
             reconstructed = model(waveform) 
@@ -94,7 +99,8 @@ def train(epochs, model, model_loss):
                 
             # Storing the losses in a list for plotting
             losses.append(loss)
-            outputs.append((epoch, waveform, reconstructed))
+            original_wav.append(waveform)
+            reconstructed_wav.append(reconstructed)
             # The gradients are set to zero,
             # the gradient is computed and stored.
             # .step() performs parameter update
@@ -102,22 +108,40 @@ def train(epochs, model, model_loss):
             loss.backward()
             optimizer.step()
             
-
+        #per epoch de loss checken via de validation set
+        #code hier
+        
 
 train(model=model, epochs=epochs, model_loss=loss)
 
-print(outputs)
-last_waveform = outputs[-1][1].detach().cpu().numpy()
-last_reconstructed = outputs[-1][2].detach().cpu().numpy()
-print(last_waveform, last_reconstructed) #reconstruted gives all zeros!!!!
+#%%
+last_waveform = original_wav[-1].detach().cpu().numpy()
+last_reconstructed = reconstructed_wav[-1].detach().cpu().numpy()
+print(last_waveform, last_reconstructed)
 
 wavio.write("last_waveform_signal.wav", last_waveform, 16000, sampwidth=4)
 wavio.write("last_reconstructed_signal.wav", last_reconstructed, 16000, sampwidth=4)
-
 
 print([X.detach().cpu().numpy().item() for X in losses])
 #plt.plot(x, [X.detach().cpu().numpy().item() for X in losses], label="loss")
 #plt.legend()
 plt.plot([X.detach().cpu().numpy().item() for X in losses])
 plt.show()
+  
+#%% 
+def score(dataset):
+    scores = [] #scores of each waveform in the test dataset
+    for waveform_sample_name in dataset["Full Sample Name"].values: 
+        print(waveform_sample_name)
+        waveform = get_waveform_seconds(waveform_sample_name[0], 4, 5)
+        waveform = np.interp(waveform, (waveform.min(), waveform.max()), (-1, +1)) #scale the date between -1 and +1
+        waveform = torch.FloatTensor(waveform).to(device=device)
+    #y_pred = model(V(x))
+    #x1 = V(x)
+    #loss(y_pred,x1).item()
+        scores.append() 
+    
+    print(scores)
+    return scores
 
+score(test_dataset)

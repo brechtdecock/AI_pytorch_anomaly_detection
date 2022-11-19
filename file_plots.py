@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import sys
+from sklearn import preprocessing
 
 print("Is cuda available:", torch.cuda.is_available())
 
@@ -33,12 +34,18 @@ print(torchaudio.info(sample_path))#different value than librosa?
 librosa resamples to 22050 instead of native sampling rate: what to do?
 """
 waveform, sample_rate = librosa.load(sample_path)
+print("waveform is:", waveform)
+waveform1 = waveform / np.max(np.abs(waveform))
+waveform2 = np.interp(waveform, (waveform.min(), waveform.max()), (-1, +1))
+waveform2 = (waveform-min(waveform))/(max(waveform)-min(waveform))
+
+print(max(waveform), min(waveform))
 print("sample rate is "+ str(sample_rate))
 
 #%%%%%%%%%%%%%
 #plot waveform
 plt.figure()
-librosa.display.waveshow(waveform, sr = sample_rate)
+librosa.display.waveshow(waveform2, sr = sample_rate)
 plt.title("Current sample: " + sample_waves[0])
 plt.show()
 
