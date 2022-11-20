@@ -58,16 +58,16 @@ test_dataset_abnormal = data_case1_abnormal
 
 train_dataset = train_dataset_normal  
 test_dataset = pd.concat([test_dataset_normal, test_dataset_abnormal])
-train_dataset, validation_dataset = train_test_split(train_dataset, test_size=0.2, shuffle=True) #further split into train and validation
+test_dataset, validation_dataset = train_test_split(test_dataset, test_size=0.2, shuffle=True) #further split into test and validation
 
 #shuffle all datasets for good measure
 train_dataset= shuffle(train_dataset)
 validation_dataset= shuffle(validation_dataset)
 test_dataset= shuffle(test_dataset)
 
-X_train = DataLoader(train_dataset["Full Sample Name"], batch_size = 64, shuffle = False)
-X_test = DataLoader(test_dataset["Full Sample Name"], batch_size = 64, shuffle = False)
-X_train = DataLoader(validation_dataset["Full Sample Name"], batch_size = 64, shuffle = False)
+X_train = DataLoader(train_dataset["Full Sample Name"].values, batch_size = 64, shuffle = False)
+X_test = DataLoader(test_dataset["Full Sample Name"].values, batch_size = 64, shuffle = False)
+X_train = DataLoader(validation_dataset["Full Sample Name"].values, batch_size = 64, shuffle = False)
 
 Y_train = train_dataset["norm/ab"]
 Y_test = test_dataset["norm/ab"]
@@ -89,8 +89,8 @@ losses = []
 def train(epochs, model, model_loss):
     
     for epoch in tqdm(arange(0, epochs)):
-        for waveform_Sample_name in X_train.values: #X_train is dataloader of the "names" of the wavefiles
-            waveform = get_waveform_seconds(waveform_Sample_name[0], 4, 5)
+        for waveform_sample_name in X_train: #X_train is dataloader of the "names" of the wavefiles
+            waveform = get_waveform_seconds(waveform_sample_name[0], 4, 5)
             waveform = np.interp(waveform, (waveform.min(), waveform.max()), (-1, +1)) #scale the date between -1 and +1
             waveform = torch.FloatTensor(waveform).to(device=device)
             
@@ -130,18 +130,51 @@ plt.show()
   
 #%% 
 def score(dataset):
-    scores = [] #scores of each waveform in the test dataset
-    for waveform_sample_name in dataset["Full Sample Name"].values: 
-        print(waveform_sample_name)
-        waveform = get_waveform_seconds(waveform_sample_name[0], 4, 5)
+    scores_normal = [] #scores of each waveform in the test dataset
+    scores_abnormal = []
+    
+    for line_of_data in dataset.iloc():
+        waveform = get_waveform_seconds(line_of_data["Full Sample Name"], 4, 5)
         waveform = np.interp(waveform, (waveform.min(), waveform.max()), (-1, +1)) #scale the date between -1 and +1
         waveform = torch.FloatTensor(waveform).to(device=device)
-    #y_pred = model(V(x))
-    #x1 = V(x)
-    #loss(y_pred,x1).item()
-        scores.append() 
-    
-    print(scores)
-    return scores
+        
+        predicted_waveform = model(waveform)
+        errorfunc= nn.MSELoss()
+        error = errorfunc(predicted_waveform,waveform)
+        
+        if line_of_data["norm/ab"] == "normal":
+            scores_normal.append(error.detach().cpu().numpy().item()) 
+        
+        if line_of_data["norm/ab"] == "abnormal":
+            scores_abnormal.append(error.detach().cpu().numpy().item()) 
+   
+    return scores_normal, scores_abnormal
 
-score(test_dataset)
+scores_normal, scores_abnormal = score(validation_dataset)
+plt.plot(scores_normal, np.zeros_like(scores_normal), 'bo') 
+plt.plot(scores_abnormal, np.zeros_like(scores_abnormal), 'rx') 
+plt.show
+# %%
+#next up try to draw a boundary around the 'normal'scores, go to higher dimension, use svm with a kernel
+
+from sklearn import svm
+from sklearn.svm import OneClassSVM
+from sklearn.inspection import DecisionBoundaryDisplay
+
+clf = svm.SVC(kernel='poly', degree=4)
+
+#clf = svm.SVC(kernel='poly', degree=5) # Kernel
+correct_classification = np.concatenate((np.ones_like(scores_abnormal)*(-1), np.ones_like(scores_normal)), axis=0) 
+
+scores_normal = np.r_['1,2,0', scores_normal, np.zeros_like(scores_normal)]
+scores_abnormal = np.r_['1,2,0', scores_abnormal, np.zeros_like(scores_abnormal)]
+all_scores = np.concatenate((scores_abnormal,scores_normal), axis= 0)
+#abnormal = -1, normal = 1
+
+clf.fit(all_scores,correct_classification)
+
+#Predict the response for test dataset
+y_pred = clf.predict([[0.3, 0.        ]])
+
+
+# %%
