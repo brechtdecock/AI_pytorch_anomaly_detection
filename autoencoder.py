@@ -1,7 +1,6 @@
 #%%imports
 import os
 from re import sub
-from unittest import case
 import pandas as pd
 from tqdm import tqdm
 import librosa
@@ -9,13 +8,11 @@ import librosa.display
 import numpy as np  
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import MinMaxScaler
 from sklearn.utils import shuffle
 from torch import *
 from torch.utils.data import DataLoader
 from AutoEncoderClass import *
 import wavio
-import gc
 
 def check_cuda():  
     if torch.cuda.is_available(): 
@@ -94,7 +91,9 @@ def train(epochs, model, model_loss):
             waveform = np.interp(waveform, (waveform.min(), waveform.max()), (-1, +1)) #scale the date between -1 and +1
             waveform = torch.FloatTensor(waveform).to(device=device)
             
-            reconstructed = model(waveform) 
+            print(waveform)
+            reconstructed = model(waveform)
+             
             loss = model_loss(reconstructed, waveform)
                 
             # Storing the losses in a list for plotting
@@ -139,7 +138,7 @@ def score(dataset):
         waveform = torch.FloatTensor(waveform).to(device=device)
         
         predicted_waveform = model(waveform)
-        errorfunc= nn.MSELoss()
+        errorfunc= nn.L1Loss()
         error = errorfunc(predicted_waveform,waveform)
         
         if line_of_data["norm/ab"] == "normal":
@@ -151,8 +150,8 @@ def score(dataset):
     return scores_normal, scores_abnormal
 
 scores_normal, scores_abnormal = score(validation_dataset)
-plt.plot(scores_normal, np.zeros_like(scores_normal), 'bo') 
-plt.plot(scores_abnormal, np.zeros_like(scores_abnormal), 'rx') 
+plt.plot(scores_normal, scores_normal, 'bo') 
+plt.plot(scores_abnormal, scores_abnormal, 'rx') 
 plt.show
 # %%
 #next up try to draw a boundary around the 'normal'scores, go to higher dimension, use svm with a kernel
@@ -161,20 +160,23 @@ from sklearn import svm
 from sklearn.svm import OneClassSVM
 from sklearn.inspection import DecisionBoundaryDisplay
 
-clf = svm.SVC(kernel='poly', degree=4)
+#clf = svm.SVC(kernel='poly', degree=4)
+#clf = OneClassSVM(gamma = 'auto', kernel = 'rbf')
+clf = svm.SVC(kernel= 'rbf') # Kernel
 
-#clf = svm.SVC(kernel='poly', degree=5) # Kernel
+
 correct_classification = np.concatenate((np.ones_like(scores_abnormal)*(-1), np.ones_like(scores_normal)), axis=0) 
 
-scores_normal = np.r_['1,2,0', scores_normal, np.zeros_like(scores_normal)]
-scores_abnormal = np.r_['1,2,0', scores_abnormal, np.zeros_like(scores_abnormal)]
+scores_normal = np.r_['1,2,0', scores_normal, scores_normal]#np.zeros_like(scores_normal)]
+scores_abnormal = np.r_['1,2,0', scores_abnormal,scores_abnormal]#np.zeros_like(scores_abnormal)]
 all_scores = np.concatenate((scores_abnormal,scores_normal), axis= 0)
 #abnormal = -1, normal = 1
 
-clf.fit(all_scores,correct_classification)
+clf.fit(all_scores, correct_classification)
+result = clf.predict(all_scores)
 
-#Predict the response for test dataset
-y_pred = clf.predict([[0.3, 0.        ]])
+disp = DecisionBoundaryDisplay.from_estimator(clf, all_scores, response_method = "predict",alpha=0.5,)
+disp.ax_.scatter(all_scores[:,0],all_scores[:,1,] , c = correct_classification ,edgecolor="black")
 
-
+plt.show()
 # %%

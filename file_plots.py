@@ -33,11 +33,12 @@ print(torchaudio.info(sample_path))#different value than librosa?
 """
 librosa resamples to 22050 instead of native sampling rate: what to do?
 """
-waveform, sample_rate = librosa.load(sample_path)
+waveform, sample_rate = librosa.load(sample_path, sr = None)
 print("waveform is:", waveform)
 waveform1 = waveform / np.max(np.abs(waveform))
 waveform2 = np.interp(waveform, (waveform.min(), waveform.max()), (-1, +1))
-waveform2 = (waveform-min(waveform))/(max(waveform)-min(waveform))
+waveform4 = librosa.util.normalize(waveform)
+waveform5 = waveform
 
 print(max(waveform), min(waveform))
 print("sample rate is "+ str(sample_rate))
@@ -45,10 +46,26 @@ print("sample rate is "+ str(sample_rate))
 #%%%%%%%%%%%%%
 #plot waveform
 plt.figure()
+librosa.display.waveshow(waveform5, sr = sample_rate)
+plt.title("Current sample: " + sample_waves[0])
+plt.show()
+
+plt.figure()
+librosa.display.waveshow(waveform1, sr = sample_rate)
+plt.title("Current sample: " + sample_waves[0])
+plt.show()
+
+plt.figure()
 librosa.display.waveshow(waveform2, sr = sample_rate)
 plt.title("Current sample: " + sample_waves[0])
 plt.show()
 
+plt.figure()
+librosa.display.waveshow(waveform4, sr = sample_rate)
+plt.title("Current sample: " + sample_waves[0])
+plt.show()
+
+#%%
 #plot spectogram
 plt.figure()
 D = librosa.amplitude_to_db(np.abs(librosa.stft(waveform)))
