@@ -53,7 +53,7 @@ for i in range(len(data_case_abnormal)):     #len(data_case_normal)):
     rms_abnormal.append(rms.item())
 #%% plot rms values'
 plt.figure()
-plt.plot(range(0,len(rms_normal)), rms_normal, color="r")
+plt.plot(rms_normal[:100], color="r")
 plt.plot(range(len(rms_normal), len(rms_normal)+len(rms_abnormal)), rms_abnormal, color="b")
 plt.title(f"RMS of healthy and unhealthy samples from case: 1 and channel: 2")
 plt.show()
