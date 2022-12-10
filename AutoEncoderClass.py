@@ -28,14 +28,14 @@ class AutoEncoder(nn.Module):  #1 second of waveform has 16 000 inputs
             #nn.Tanh(),
             #nn.Linear(50, 25),
             #nn.Tanh(),
-            #nn.Linear(25, 3),
-            nn.Dropout(0.1)
+            #nn.Linear(25, 10),
+            nn.Dropout(0.1)         #20% seems too high
            
            #no function after this???
         )
          
         self.decoder = torch.nn.Sequential( 
-            #nn.Linear(3, 25),
+            #nn.Linear(10, 25),      #bottleneck later of 10 doesnt improve performance
             #nn.Tanh(),
             #nn.Linear(25, 50),
             #nn.Tanh(),
