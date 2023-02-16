@@ -1,8 +1,8 @@
 import torch.nn as nn
 from torch.autograd import Variable as V
-import torch.nn.functional as Functional
+#import torch.nn.functional as Functional
 import torch
-from torch.utils.data import DataLoader
+#from torch.utils.data import DataLoader
 
 class AutoEncoder(nn.Module):  #1 second of waveform has 16 000 inputs
     def __init__(self, length):
