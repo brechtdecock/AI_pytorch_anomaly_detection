@@ -13,6 +13,8 @@ class CAE(nn.Module):  #0.5 second of waveform has 8 000 inputs
         super().__init__()
         """
         use 1D components or use 2D components with [length,1] as input and [3,1] as kernel?
+        
+        often relu is used an only sigmoid(tanh in my case) at the end==better??? doesn't seem like it
         """
         
         #(batch size, channels, x-dim,  y-dim)
