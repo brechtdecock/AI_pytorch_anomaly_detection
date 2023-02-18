@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
 
+class Trim(nn.Module): #dont know if necessary but just in case
+    def __init__(self, *args):
+        super().__init__()
+
+    def forward(self, x):
+        return x[:, :, :8000, :]
 
 class CAE(nn.Module):  #0.5 second of waveform has 8 000 inputs
     def __init__(self):
@@ -34,35 +40,35 @@ class CAE(nn.Module):  #0.5 second of waveform has 8 000 inputs
         nn.MaxPool2d(kernel_size=(2,1), stride=2),
         #nn.Dropout(p=1 - keep_prob))
         
+        #    shape   =  (?, 128, 1000, 1)
+        #    Conv      ->(?, 256, 1000, 1)
+        #    Pool      ->(?, 256, 500, 1)
+        nn.Conv2d(in_channels = 128, out_channels = 256, kernel_size=(3,1), stride=1, padding="same"),
+        nn.Tanh(),
+        nn.MaxPool2d(kernel_size=(2,1), stride=2),
         
         
+        #    shape   =  (?, 256, 500, 1)
+        #    Conv      ->(?, 512, 500, 1)
+        #    Pool      ->(?, 512, 250, 1)
+        nn.Conv2d(in_channels = 256, out_channels = 512, kernel_size=(3,1), stride=1, padding="same"),
+        nn.Tanh(),
+        nn.MaxPool2d(kernel_size=(2,1), stride=2),
         )  
-          
-    # input_shape=(28,28,1)
-    # n_channels = input_shape[-1]
-    # model = Sequential()
-    # model.add(Conv2D(32, (3,3), activation='relu', padding='same', input_shape=input_shape))
-    # model.add(MaxPool2D(padding='same'))
-    # model.add(Conv2D(16, (3,3), activation='relu', padding='same'))
-    # model.add(MaxPool2D(padding='same'))
-    # model.add(Conv2D(8, (3,3), activation='relu', padding='same'))
-    # model.add(UpSampling2D())
-    # model.add(Conv2D(16, (3,3), activation='relu', padding='same'))
-    # model.add(UpSampling2D())
-    # model.add(Conv2D(32, (3,3), activation='relu', padding='same'))
-    # model.add(Conv2D(n_channels, (3,3), activation='sigmoid', padding='same'))
-       
-  
-        
          
         self.decoder = torch.nn.Sequential( 
-        nn.ConvTranspose2d(128, 64, kernel_size = (3,1), stride=2, padding = 0),
+        nn.ConvTranspose2d(512, 256, kernel_size = (3,1), stride=2),
         nn.Tanh(),
-        nn.ConvTranspose2d(64, 32, kernel_size = (3,1), stride=2, padding = 0),
+        nn.ConvTranspose2d(256, 128, kernel_size = (3,1), stride=2),
         nn.Tanh(),
-        nn.ConvTranspose2d(32, 1, kernel_size = (3,1), stride=2, padding = 0),
+        nn.ConvTranspose2d(128, 64, kernel_size = (3,1), stride=2),
         nn.Tanh(),
-        nn.Flatten() #??????
+        nn.ConvTranspose2d(64, 32, kernel_size = (3,1), stride=2),
+        nn.Tanh(),
+        nn.ConvTranspose2d(32, 1, kernel_size = (3,1), stride=2),
+        nn.Tanh(),
+        Trim(),
+        #nn.Flatten() #??????
         )
  
     def forward(self, data):
