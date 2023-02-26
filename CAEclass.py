@@ -76,12 +76,6 @@ class CAE(nn.Module):  #0.5 second of waveform has 8 000 inputs
         #    shape   =  (?, 256, 500, 1)
         #    Conv      ->(?, 512, 500, 1)
         #    Pool      ->(?, 512, 250, 1)
-         
-        
-        """"
-        doe een VAE
-        doe statistics op resutls allle cases channel1 van SVDD, AE, CAE
-        """
  
     def forward(self, data):
         out_32_enc = self.conv1(data)
