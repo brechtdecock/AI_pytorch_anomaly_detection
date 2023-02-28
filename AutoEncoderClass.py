@@ -55,13 +55,21 @@ class AutoEncoder(nn.Module):  #0.5 second of waveform has 16 000 inputs
         out_drop = self.drop(out_50_enc)
         
         #with skip connections implemented: add the data from the layers of the encoder
-        out_100_dec = out_100_enc+ self.delin1(out_drop)
-        out_250_dec = out_250_enc+ self.delin2(out_100_dec)
-        out_500_dec = out_500_enc+ self.delin3(out_250_dec)
-        out_1000_dec = out_1000_enc+ self.delin4(out_500_dec)
-        out_2000_dec = out_2000_enc+ self.delin5(out_1000_dec)
-        out_4000_dec = out_4000_enc+ self.delin6(out_2000_dec)
-        out_8000_dec = data + self.delin7(out_4000_dec)
+        # out_100_dec = out_100_enc+ self.delin1(out_drop)
+        # out_250_dec = out_250_enc+ self.delin2(out_100_dec)
+        # out_500_dec = out_500_enc+ self.delin3(out_250_dec)
+        # out_1000_dec = out_1000_enc+ self.delin4(out_500_dec)
+        # out_2000_dec = out_2000_enc+ self.delin5(out_1000_dec)
+        # out_4000_dec = out_4000_enc+ self.delin6(out_2000_dec)
+        # out_8000_dec = data + self.delin7(out_4000_dec)
+        
+        out_100_dec =self.delin1(out_drop)
+        out_250_dec =self.delin2(out_100_dec)
+        out_500_dec =self.delin3(out_250_dec)
+        out_1000_dec = self.delin4(out_500_dec)
+        out_2000_dec = self.delin5(out_1000_dec)
+        out_4000_dec = self.delin6(out_2000_dec)
+        out_8000_dec =  self.delin7(out_4000_dec)
 
         return out_8000_dec
   
