@@ -1,13 +1,6 @@
 import torch
 import torch.nn as nn
 
-class Trim(nn.Module): #dont know if necessary but just in case
-    def __init__(self, *args):
-        super().__init__()
-
-    def forward(self, x):
-        return x[:, :, :8000, :]
-
 class CAE(nn.Module):  #0.5 second of waveform has 8 000 inputs
     def __init__(self):
         super().__init__()
