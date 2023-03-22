@@ -95,3 +95,7 @@ class CAE(nn.Module):  #0.5 second of waveform has 8 000 inputs
         
         
         return out_1_dec
+    
+import torchinfo
+model = CAE().to(device='cuda')
+torchinfo.summary(model, input_size=(1,1, 8000, 1)) #batch_size, channel, rows,cols
