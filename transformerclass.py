@@ -89,11 +89,7 @@ class TransformerEncoderLayer(nn.Module):
             dimension=dim_model,
             dropout=dropout,
         )
-        self.feed_forward = Residual(
-            feed_forward(dim_model, dim_feedforward),
-            dimension=dim_model,
-            dropout=dropout,
-        )
+        self.feed_forward = Residual(feed_forward(dim_model, dim_feedforward),dimension=dim_model,dropout=dropout,)
 
     def forward(self, src: Tensor) -> Tensor:
         src = self.attention(src, src, src)

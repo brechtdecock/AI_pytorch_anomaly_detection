@@ -58,7 +58,6 @@ class AudioEmbedding(nn.Module):
         
         
         position_embedding = self.getPositionEncoding(512,250).to(device=conv_feature_embedding.device)
-        print(torch.add(conv_feature_embedding,position_embedding).shape )
         return torch.add(conv_feature_embedding,position_embedding) 
     
     
