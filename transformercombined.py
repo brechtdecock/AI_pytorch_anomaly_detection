@@ -52,12 +52,10 @@ class AudioEmbedding(nn.Module):
         out_512_enc = self.conv5(out_256_enc)
       
         out_drop = self.drop(out_512_enc)
-        print("beforesqueeze", out_drop.shape)
         
         #typically the vector is stored horizontally, while the sequence is stored vertically
         conv_feature_embedding = torch.squeeze(out_drop, dim = -1) #so length of 512, each a vector of 250 long 
-        print("aftersqueeze", conv_feature_embedding.shape)
-
+        
         
         position_embedding = self.getPositionEncoding(512,250).to(device=conv_feature_embedding.device)
         return torch.add(conv_feature_embedding,position_embedding) 
@@ -216,3 +214,218 @@ class Transformer(nn.Module):
         
         x = self.toAudio(x.unsqueeze(-1)) ## add a dimension so [batch, 512, 250] is of the expected size [batch, 512, 250,1] 
         return x
+    
+import pandas as pd
+import numpy as np
+import librosa
+import os
+import tqdm
+
+import torch
+from torch.utils.data import DataLoader
+
+from sklearn.utils import shuffle
+from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
+
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+print('Using device:', device)
+
+
+def load_dataset(dataset_path):
+    """Loads a dataset from a CSV file."""
+    return pd.read_csv(dataset_path)
+
+def filter_dataset_by_cases_and_channels(dataset, cases, channels):
+    """Filters a dataset to keep only the rows that correspond to the specified cases and channels."""
+    selected_rows = pd.DataFrame()
+    for case_number in cases:
+        rows_for_case = dataset[dataset['Case'] == f'case{case_number}']
+        selected_rows = pd.concat([selected_rows, rows_for_case])
+    selected_rows = selected_rows[selected_rows['Channel'].isin(channels)]
+    return selected_rows
+
+def split_dataset_for_train_val_test(data_pd):
+    """Splits a dataset into three parts: train, validation, and test."""
+    normal_data = data_pd[data_pd['norm/ab'] == 'normal']
+    abnormal_data = data_pd[data_pd['norm/ab'] == 'abnormal']
+    
+    # We only need normal data for training, but validation and test need both normal and abnormal data.
+    train_data, intermediate_data = train_test_split(normal_data, test_size=0.2, shuffle=True)
+    validation_data, test_data = train_test_split(pd.concat([abnormal_data, intermediate_data]), test_size=0.8, shuffle=True)
+
+    return train_data, validation_data, test_data
+
+def train_val_test(dataset_path=None, cases=[], channels=[]):
+    """Loads a dataset, filters it, and splits it for training, validation, and test."""
+    dataset = load_dataset(dataset_path)
+    filtered_dataset = filter_dataset_by_cases_and_channels(dataset, cases, channels)
+    train_data, validation_data, test_data = split_dataset_for_train_val_test(filtered_dataset)
+    return train_data, validation_data, test_data
+
+
+datapath = r'/data/leuven/350/vsc35045/ToyADMOS/ToycarCSV.csv'
+cases = [1]
+channels = ['ch1']
+train_data, validation_data, test_data = train_val_test(dataset_path=datapath, cases=cases, channels=channels)
+
+import librosa
+import ffmpeg
+#helper functions 
+def find_path_to_wav(full_sample_name):
+    for root, dirs, files in os.walk(os.path.dirname(datapath)):
+        for name in files:
+            if name == full_sample_name:
+                path_to_wavFile = os.path.abspath(os.path.join(root, name))
+                return path_to_wavFile
+
+def get_sample_waveform_normalised(full_sample_name, start = 0, stop = 11):
+    #returns waveform values, cut to seconds going from start to stop
+    sample_path = find_path_to_wav(full_sample_name)
+    waveform, sample_rate = librosa.load(sample_path, sr= None)
+    waveform = waveform[int(start*sample_rate): int(stop*sample_rate)]
+    return librosa.util.normalize(waveform)
+
+
+X_train_wav = train_data["Full Sample Name"].values
+X_test_wav = test_data["Full Sample Name"].values
+X_valid_wav = validation_data["Full Sample Name"].values
+
+batch_train = np.array([get_sample_waveform_normalised(elem,4,4.5) for elem in X_train_wav]) 
+batch_test = np.array([get_sample_waveform_normalised(elem,4,4.5) for elem in X_test_wav])
+batch_val = np.array([get_sample_waveform_normalised(elem,4,4.5) for elem in X_valid_wav])
+
+batch_train_reshaped =  np.reshape(batch_train,(len(batch_train),1,8000,1))
+batch_test_reshaped =  np.reshape(batch_test,(len(batch_test),1,8000,1))
+batch_val_reshaped =  np.reshape(batch_val,(len(batch_val),1,8000,1))
+
+X_train = DataLoader(batch_train_reshaped, batch_size=4, shuffle=False)  # comes from 64
+X_test = DataLoader(batch_test_reshaped, batch_size=4, shuffle=False)
+X_val = DataLoader(batch_val_reshaped, batch_size=4, shuffle=False)
+
+Y_train = train_data["norm/ab"]
+Y_train = np.array([1 if i == "normal" else -1 for i in Y_train]).reshape(-1, 1)
+
+Y_val = validation_data["norm/ab"]
+Y_val = np.array([1 if i == "normal" else -1 for i in Y_val]).reshape(-1, 1)
+
+Y_test = test_data["norm/ab"]
+Y_test = np.array([1 if i == "normal" else -1 for i in Y_test]).reshape(-1, 1)
+
+
+model = Transformer(emb_dim=250, heads=5, nb_transformer_blocks=6, seq_length=512).to(device=device)
+
+
+model_loss = nn.MSELoss()    #?nn.L1Loss() best type of loss for sound?, MSE loss seems to result in lower loss
+learning_rate = 0.0001  #0.0001 seems best so far
+optimizer=torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+epochs = 10
+losses = []
+avg_val_losses = []
+
+
+def train(epochs, model, model_loss):
+    for epoch in tqdm.tqdm(range(epochs)):
+        
+        for batch_idx, data in enumerate(X_train):
+            model.train(True)
+            # Zero your gradients for every batch!
+            model.zero_grad()
+            
+            #for param in model.parameters(): #instead of model.zero_grad: https://pytorch.org/tutorials/recipes/recipes/tuning_guide.html#:~:text=implement%20this%20optimization.-,Use%20parameter.grad,-%3D%20None%20instead%20of
+            #    param.grad = None
+            
+            # Make predictions for this batch
+            data_gpu = data.to(device= device)
+            outputs = model(data_gpu)
+    
+            # Compute the loss and its gradients
+            loss = model_loss(outputs, data_gpu)
+            
+            loss.backward()
+            optimizer.step()
+           
+            losses.append(loss.item())
+            #del loss 
+            #del data #free memory
+            #del outputs
+            
+            model.train(False)
+
+        
+        #hier validation data gebruiken, gets run once per epoch
+        #get average loss value of the validation data
+        running_val_loss = []
+        for val_data in X_val:
+            val_data_gpu = val_data.to(device=device)
+            val_outputs = model(val_data_gpu)
+            val_loss = model_loss(val_outputs, val_data_gpu)
+            
+            running_val_loss.append(val_loss.item())
+
+        avg_val_losses.append(np.average(running_val_loss))
+
+train(model=model, epochs=epochs, model_loss=model_loss)
+
+def score(dataset, scoring_function): 
+    scores_normal = [] #scores of each waveform in the test datase
+    scores_abnormal = []
+    
+    for line_of_data in dataset.iloc():
+        waveform = np.array(get_sample_waveform_normalised(line_of_data["Full Sample Name"], 4, 4.5))
+        waveform = np.reshape(waveform,(-1,1,8000,1))
+        waveform_gpu = torch.FloatTensor(waveform).to(device=device)
+
+        predicted_waveform = model(waveform_gpu)
+        error = scoring_function(predicted_waveform,waveform_gpu) 
+        
+        if line_of_data["norm/ab"] == "normal":
+            scores_normal.append(error.detach().cpu().numpy().item()) 
+        
+        if line_of_data["norm/ab"] == "abnormal":
+            scores_abnormal.append(error.detach().cpu().numpy().item()) 
+   
+    return scores_normal, scores_abnormal
+
+MSE_scores_normal, MSE_scores_abnormal = score(test_data, scoring_function = nn.MSELoss())
+L1_scores_normal, L1_scores_abnormal = score(test_data, scoring_function = nn.L1Loss())
+CEL_scores_normal, CEL_scores_abnormal =score(test_data, scoring_function =nn.CrossEntropyLoss()) 
+
+from sklearn.metrics import confusion_matrix
+from sklearn.metrics import ConfusionMatrixDisplay
+from sklearn.metrics import roc_curve, auc
+from sklearn.model_selection import train_test_split
+
+from sklearn.preprocessing import StandardScaler
+
+
+#RESCALE DATA! met standardscaler
+L1_scores_normal = np.array(L1_scores_normal).reshape(-1, 1)
+L1_scores_abnormal = np.array(L1_scores_abnormal).reshape(-1, 1)
+
+scaler_normal = StandardScaler() #necessary?
+scaler_normal.fit_transform(L1_scores_normal)
+
+scaler_abnormal = StandardScaler()
+scaler_abnormal.fit_transform(L1_scores_abnormal)
+
+L1_all_scores = np.append(L1_scores_abnormal, L1_scores_normal).reshape(-1, 1) # first abnormal(-1), then normal(1) # test scores
+L1_all_results = np.ravel(np.concatenate((np.ones_like(L1_scores_abnormal)*(-1), np.ones_like(L1_scores_normal)), axis=0)) #true result
+
+# confusion matrix and ROC curve
+fpr, tpr, _ = roc_curve(L1_all_results,L1_all_scores )  #y_true, y_score
+roc_auc = auc(fpr, tpr)
+
+plt.figure()
+plt.plot(fpr, tpr, color="darkorange", lw=3, label="ROC curve (area = %0.2f)" % roc_auc)
+plt.plot([0, 1], [0, 1], color="navy", lw=3, linestyle="--")
+plt.xlim([0.0, 1.0])
+plt.ylim([0.0, 1.05])
+plt.xlabel("False Positive Rate")
+plt.ylabel("True Positive Rate")
+plt.title("Receiver operating characteristic")
+plt.legend(loc="lower right")
+plt.grid()
+plt.show()
