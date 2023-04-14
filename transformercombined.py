@@ -4,9 +4,37 @@ import torch.nn as nn
 from torch.autograd import Variable
 import torch.nn.functional as F
 import numpy as np
+import logging
+import argparse
+
+parser = argparse.ArgumentParser(prog='transformer')
+parser.add_argument('--TB', help='Number of transformer blocks', required=True)
+parser.add_argument('--mask', help='Type of inference mask', required=True)
+parser.add_argument('--epochs', help='Number of epochs', required=True)
+args = vars(parser.parse_args())
+
+nb_transformer_blocks = int(args.get('TB'))
+epochs = int(args.get('epochs'))
+
+if args.get('mask') == 'single':
+    mask = "single diag matrix"
+elif args.get('mask') == 'upper':
+    mask = "upper diag matrix"
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print('Using device:', device)
+
+
+# configure the logging system
+logging.basicConfig(filename='loggingFile.log', level=logging.INFO)
+
+# create a stream handler to print log messages to the terminal
+console = logging.StreamHandler()
+console.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+console.setFormatter(formatter)
+logging.getLogger('').addHandler(console)
+
 
 class AudioEmbedding(nn.Module):
     def __init__(self):
@@ -149,7 +177,21 @@ class SelfAttention(nn.Module):
         """
         if mask is used: create upper triangluar matrix of -inf(this will set softmax to zero at those positions)
         """
-        indices = torch.triu_indices(seq_len, seq_len, offset=1)
+        
+        # global mask  #to use it in the logging
+        # #mask = "upper diag matrix"
+        # mask = "single diag matrix"
+        
+        if mask =="single diag matrix":
+            # convert numpy array to torch tensor    
+            mat = np.eye(seq_len, k=1)
+            indices = torch.from_numpy(mat).nonzero() #gets indices but in the wrong dimension
+            indices = indices.transpose(0,1)
+            
+        elif mask == "upper diag matrix":
+            indices = torch.triu_indices(seq_len, seq_len, offset=1)
+        print("mask =" ,mask)
+        
         dot[:, indices[0], indices[1]] = float('-inf')
 
         # normalize 
@@ -193,7 +235,7 @@ class TransformerBlock(nn.Module):
     
     
 class Transformer(nn.Module):
-    def __init__(self, emb_dim, heads, nb_transformer_blocks, seq_length):
+    def __init__(self, heads, nb_transformer_blocks, emb_dim, seq_length):
         super().__init__()
 
         self.embedding = AudioEmbedding()
@@ -300,9 +342,9 @@ batch_train_reshaped =  np.reshape(batch_train,(len(batch_train),1,8000,1))
 batch_test_reshaped =  np.reshape(batch_test,(len(batch_test),1,8000,1))
 batch_val_reshaped =  np.reshape(batch_val,(len(batch_val),1,8000,1))
 
-X_train = DataLoader(batch_train_reshaped, batch_size=4, shuffle=False)  # comes from 64
-X_test = DataLoader(batch_test_reshaped, batch_size=4, shuffle=False)
-X_val = DataLoader(batch_val_reshaped, batch_size=4, shuffle=False)
+X_train = DataLoader(batch_train_reshaped, batch_size=64, shuffle=False)  # comes from 64
+X_test = DataLoader(batch_test_reshaped, batch_size=64, shuffle=False)
+X_val = DataLoader(batch_val_reshaped, batch_size=64, shuffle=False)
 
 Y_train = train_data["norm/ab"]
 Y_train = np.array([1 if i == "normal" else -1 for i in Y_train]).reshape(-1, 1)
@@ -314,17 +356,18 @@ Y_test = test_data["norm/ab"]
 Y_test = np.array([1 if i == "normal" else -1 for i in Y_test]).reshape(-1, 1)
 
 
-model = Transformer(emb_dim=250, heads=5, nb_transformer_blocks=6, seq_length=512).to(device=device)
+heads = 5
+#nb_transformer_blocks = 6
+model = Transformer(heads, nb_transformer_blocks, emb_dim=250,seq_length=512).to(device=device)
 
 
 model_loss = nn.MSELoss()    #?nn.L1Loss() best type of loss for sound?, MSE loss seems to result in lower loss
 learning_rate = 0.0001  #0.0001 seems best so far
 optimizer=torch.optim.Adam(model.parameters(), lr=learning_rate)
 
-epochs = 10
+#epochs = 50
 losses = []
 avg_val_losses = []
-
 
 def train(epochs, model, model_loss):
     for epoch in tqdm.tqdm(range(epochs)):
@@ -368,6 +411,20 @@ def train(epochs, model, model_loss):
         avg_val_losses.append(np.average(running_val_loss))
 
 train(model=model, epochs=epochs, model_loss=model_loss)
+
+plt.figure(figsize = (15,10))
+plt.subplot(2,1,1)
+plt.xlabel("epochs*nb_of_batches")
+plt.ylabel("Training losses")
+plt.plot(losses)
+
+plt.subplot(2,1,2)
+plt.plot(avg_val_losses)
+plt.xlabel("epochs")
+plt.ylabel("Validation losses")
+plt.show()
+plt.savefig('TrainLossValLoss'+ str(epochs) +'_'+ str(nb_transformer_blocks)+'_'+str(mask) +'.png', dpi=400)
+
 
 def score(dataset, scoring_function): 
     scores_normal = [] #scores of each waveform in the test datase
@@ -429,3 +486,7 @@ plt.title("Receiver operating characteristic")
 plt.legend(loc="lower right")
 plt.grid()
 plt.show()
+plt.savefig('AUCscore'+ str(epochs) +'_'+ str(nb_transformer_blocks)+'_'+str(mask) +'.png', dpi=400)
+
+
+logging.info(f"model = {model} \n case = {cases} \n heads = {heads} \n transformer_blocks = {nb_transformer_blocks} \n mask = {mask} \n learning rate = {learning_rate} \n losses = {losses} \n avg_val_losses = {avg_val_losses} \n AUC score = {roc_auc}")
